@@ -211,24 +211,24 @@ uint32_t find_write_gadget(void)
 
 uint32_t find_vm_kernel_addrperm(void)
 {
-    struct nlist *n = find_sym("_vm_kernel_addrperm_external");
+    struct nlist *n = find_sym("_buf_kernel_addrperm_addr"); //THIS WAS TESTED ON 8.4.1
     assert(n);
     
     uint32_t val = 0;
+    uint32_t *addr = 0;
+    uint32_t addr2 = 0;
     
     for (uint16_t *p = (uint16_t *)(base + (n->n_value - kbase)); *p != 0xBF00; p++) {
-        if (insn_is_mov_imm(p) && (insn_mov_imm_rd(p) == 2)) {
-            val = insn_mov_imm_imm(p);
-        } else if (insn_is_movt(p) && (insn_movt_rd(p) == 2)) {
-            val |= (insn_movt_imm(p) << 16);
-        } else if (insn_is_add_reg(p) && (insn_add_reg_rd(p) == 2) && (insn_add_reg_rm(p) == 0xF)) {
+        if (insn_is_mov_imm(p) && insn_is_mov_imm(p) && !val) {
+            val = insn_mov_imm_imm(p++);
+        } else if (insn_is_movt(p) && val < (1<<16) ) {
+            val |= (insn_movt_imm(p++) << 16);
+        } else if (insn_is_add_reg(p) && (insn_add_reg_rm(p) == 0xF) && !addr) {
             uint32_t ip = ADDR_MAP_TO_KCACHE(p);
-            val += ip+4;
-        } else if (insn_is_ldr_imm(p) && (insn_ldr_imm_rt(p) == 2)) {
-            val += insn_ldr_imm_imm(p);
-            val -= 0x8;
-            
-            return UNSLIDE(uint32_t, val, kbase);
+            addr = (uint32_t *)ADDR_KCACHE_TO_MAP(ip+val+4);
+        } else if (insn_is_thumb2_ldr(p)){
+            addr2 = (uint32_t)ADDR_MAP_TO_KCACHE(addr) + ((*++p)& ((1<<12)-1));
+            return UNSLIDE(uint32_t, (addr2-4), kbase);
         }
     }
     
@@ -359,7 +359,7 @@ uint32_t find_task_for_pid(void)
 int main(int argc, const char * argv[]) {
     
     if (argc != 2) {
-        printf("Usage: offsetfinder [kernelcache_path]\n",argv[0]);
+        printf("Usage: offsetfinder [kernelcache_path]\n");
         return 1;
     }
     
@@ -391,8 +391,9 @@ int main(int argc, const char * argv[]) {
     FIND_AND_PRINT_OFFSET(copyin);
     FIND_AND_PRINT_OFFSET(bx_lr);
     FIND_AND_PRINT_OFFSET(write_gadget);
-//    FIND_AND_PRINT_OFFSET(vm_kernel_addrperm); //WRONG
+    FIND_AND_PRINT_OFFSET(vm_kernel_addrperm); //WRONG
     FIND_AND_PRINT_OFFSET(kernel_pmap);
+    FIND_AND_PRINT_OFFSET(invalidate_tlb);
 //    FIND_AND_PRINT_OFFSET(allproc); // WRONG
     FIND_AND_PRINT_OFFSET(proc_ucred);
     

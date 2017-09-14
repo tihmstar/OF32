@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		873B54DA1F6A713D00E6EA7B /* patchfinder32.c in Sources */ = {isa = PBXBuildFile; fileRef = 873B54D81F6A713D00E6EA7B /* patchfinder32.c */; };
+		873B54DE1F6A716600E6EA7B /* machoman.c in Sources */ = {isa = PBXBuildFile; fileRef = 873B54DC1F6A716600E6EA7B /* machoman.c */; };
 		87ECBF5F1F6A6F9F00D3E102 /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = 87ECBF5E1F6A6F9F00D3E102 /* main.c */; };
 /* End PBXBuildFile section */
 
@@ -23,10 +25,12 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		873B54C81F6A707600E6EA7B /* machoman */ = {isa = PBXFileReference; lastKnownFileType = folder; path = machoman; sourceTree = "<group>"; };
-		873B54CC1F6A707600E6EA7B /* patchfinder32 */ = {isa = PBXFileReference; lastKnownFileType = folder; path = patchfinder32; sourceTree = "<group>"; };
+		873B54D81F6A713D00E6EA7B /* patchfinder32.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = patchfinder32.c; path = patchfinder32/patchfinder32.c; sourceTree = "<group>"; };
+		873B54D91F6A713D00E6EA7B /* patchfinder32.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = patchfinder32.h; path = patchfinder32/patchfinder32.h; sourceTree = "<group>"; };
+		873B54DC1F6A716600E6EA7B /* machoman.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = machoman.c; path = machoman/machoman.c; sourceTree = "<group>"; };
+		873B54DD1F6A716600E6EA7B /* machoman.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = machoman.h; path = machoman/machoman.h; sourceTree = "<group>"; };
 		87ECBF5B1F6A6F9F00D3E102 /* offsetfinder */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = offsetfinder; sourceTree = BUILT_PRODUCTS_DIR; };
-		87ECBF5E1F6A6F9F00D3E102 /* main.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = main.c; sourceTree = "<group>"; };
+		87ECBF5E1F6A6F9F00D3E102 /* main.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = main.c; path = offsetfinder/main.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -40,10 +44,29 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		873B54D71F6A712D00E6EA7B /* patchfinder32 */ = {
+			isa = PBXGroup;
+			children = (
+				873B54D91F6A713D00E6EA7B /* patchfinder32.h */,
+				873B54D81F6A713D00E6EA7B /* patchfinder32.c */,
+			);
+			name = patchfinder32;
+			sourceTree = "<group>";
+		};
+		873B54DB1F6A714700E6EA7B /* machoman */ = {
+			isa = PBXGroup;
+			children = (
+				873B54DD1F6A716600E6EA7B /* machoman.h */,
+				873B54DC1F6A716600E6EA7B /* machoman.c */,
+			);
+			name = machoman;
+			sourceTree = "<group>";
+		};
 		87ECBF521F6A6F9F00D3E102 = {
 			isa = PBXGroup;
 			children = (
 				87ECBF5D1F6A6F9F00D3E102 /* offsetfinder */,
+				87ECBF5E1F6A6F9F00D3E102 /* main.c */,
 				87ECBF5C1F6A6F9F00D3E102 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -59,9 +82,8 @@
 		87ECBF5D1F6A6F9F00D3E102 /* offsetfinder */ = {
 			isa = PBXGroup;
 			children = (
-				873B54C81F6A707600E6EA7B /* machoman */,
-				873B54CC1F6A707600E6EA7B /* patchfinder32 */,
-				87ECBF5E1F6A6F9F00D3E102 /* main.c */,
+				873B54D71F6A712D00E6EA7B /* patchfinder32 */,
+				873B54DB1F6A714700E6EA7B /* machoman */,
 			);
 			path = offsetfinder;
 			sourceTree = "<group>";
@@ -124,6 +146,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				87ECBF5F1F6A6F9F00D3E102 /* main.c in Sources */,
+				873B54DA1F6A713D00E6EA7B /* patchfinder32.c in Sources */,
+				873B54DE1F6A716600E6EA7B /* machoman.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
