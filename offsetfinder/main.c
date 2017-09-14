@@ -35,8 +35,9 @@ enum {
 
 void *base = NULL;
 uint32_t kbase = 0;
+uint32_t ksize = 0;
 
-uint32_t ADDR_MAP_TO_KCACHE(uint16_t* addr) { uint32_t _tmp_addr =         ((addr) ? SLIDE(uint32_t, UNSLIDE(void*, addr, base), kbase) : 0); return _tmp_addr; }
+uint32_t ADDR_MAP_TO_KCACHE(uint16_t* addr) { uint32_t _tmp_addr = ((addr) ? SLIDE(uint32_t, UNSLIDE(void*, addr, base), kbase) : 0); return _tmp_addr; }
 
 
 struct mach_header *mh = NULL;
@@ -268,49 +269,62 @@ uint32_t find_invalidate_tlb(void)
 
 uint32_t find_allproc(void)
 {
-    struct nlist *n = find_sym("_groupmember");
-    struct nlist *n2 = find_sym("_kauth_cred_get");
-    struct nlist *n3 = find_sym("_lck_mtx_lock");
+    uint8_t *str = memmem(base, ksize, "\"pgrp_add : pgrp is dead adding process", sizeof("pgrp_add : pgrp is dead adding process")-1);
+    assert(str);
     
-    assert(n);
-    assert(n2);
-    assert(n3);
+    uint16_t *ref = find_literal_ref(kbase, base, ksize, str-(uint8_t*)base);
+    assert(ref);
+
+    while (!insn_is_thumb2_pop(ref++)) assert(ref<base+ksize);
+    uint16_t *bottom=ref;
     
-    boolean_t mark1 = FALSE;
-    boolean_t mark2 = FALSE;
+    while (!insn_is_thumb2_push(--ref)) assert(ref>base);
+    uint16_t *top = ref;
     
-    uint32_t *p = NULL;
-    for (p = (uint32_t *)(ADDR_KCACHE_TO_MAP(n->n_value));; p++) {
-        if (insn_is_32bit((uint16_t *)p) && insn_is_bl((uint16_t *)p)) {
-            uint32_t ip = ADDR_MAP_TO_KCACHE(p);
-            uint32_t val = (ip + (int32_t)insn_bl_imm32((uint16_t *)p) + 4);
-            
-            if (!mark1 && (val == n2->n_value))
-                mark1++;
-            else if (!mark2 && mark1 && (val == n3->n_value))
-                break;
+    uint16_t *itttne = 0;
+    for (uint16_t*i=bottom; i>base; i--)
+        if (*i == 0xbf1e){
+            itttne = i;
+            break;
+        }
+    assert(itttne);
+    
+    uint16_t *ittne = 0;
+    for (uint16_t*i=itttne; i<bottom; i++)
+        if (*i == 0xbf1c){
+            ittne = i;
+            break;
+        }
+    assert(ittne);
+    
+    uint32_t offset = 0;
+    uint16_t *pos = 0;
+    int rn = 0;
+    for (uint16_t *i=ittne; i>itttne; i--) {
+        if (insn_is_thumb2_ldr(i)){
+            pos = i;
+            offset = *(i+1) & ((1<<12)-1);
+            rn = *i & ((1<<4)-1);
+            break;
         }
     }
+    assert(offset);
     
     uint32_t val = 0;
-        
-    for (uint16_t *p2 = (uint16_t *)p; *p2 != 0xBF00; p2++) {
-        if (insn_is_mov_imm(p2) && (!insn_mov_imm_rd(p2))) {
-            val = insn_mov_imm_imm(p2);
-        } else if (insn_is_movt(p2) && (!insn_movt_rd(p2))) {
-            val |= (insn_movt_imm(p2) << 16);
-        } else if (insn_is_add_reg(p2) && (!insn_add_reg_rd(p2)) && (insn_add_reg_rm(p2) == 0xF)) {
-            uint32_t ip = (uint32_t)((void *)(p2+2) - base) + kbase;
-            val += ip;
-        } else if (insn_is_ldr_imm(p2) && (!insn_ldr_imm_rt(p2))) {
-            val += insn_ldr_imm_imm(p2);
-            val += 0x8;
-            
-            return UNSLIDE(uint32_t, val, kbase);
+    for (uint16_t *p=pos; p>top; p--) {
+        if (insn_add_reg_rm(p) == 15 && insn_add_reg_rd(p) == rn){
+            offset += (uint8_t*)p - (uint8_t*)base + kbase;
+        }else if (insn_is_movt(p) && insn_movt_rd(p) == rn && !(val>>16)){
+            val |= insn_movt_imm(p) << 16;
+        }else if (insn_is_mov_imm(p) && insn_mov_imm_rd(p) == rn && !(val & ((1<<16)-1))){
+            val |= insn_mov_imm_imm(p);
         }
+        if (val >> 16 && (val & ((1<<16)-1)))
+            break;
     }
+    offset += val + 4;
     
-    return 0;
+    return UNSLIDE(uint32_t, offset, kbase);
 }
 
 uint32_t find_proc_ucred(void)
@@ -351,21 +365,13 @@ uint32_t find_task_for_pid(void)
     return find_sig((void *)&sig, sizeof(sig));
 }
 
-#define FIND_OFFSET(name)               uint32_t off_##name = find_##name();
-#define PRINT_OFFSET(name)              fprintf(stdout, "[%-25s]: %#x\n", #name, off_##name)
+#define FIND_OFFSET(name)               uint32_t off_##name = find_##name()
+#define PRINT_OFFSET(name)              fprintf(stdout, "pushOffset(0x%08x); //%s\n", off_##name, #name)
 
-#define FIND_AND_PRINT_OFFSET(name)     { FIND_OFFSET(name); PRINT_OFFSET(name); }
+#define FIND_AND_PRINT_OFFSET(name)     { FIND_OFFSET(name); PRINT_OFFSET(name);}
 
-int main(int argc, const char * argv[]) {
-    
-    if (argc != 2) {
-        printf("Usage: offsetfinder [kernelcache_path]\n");
-        return 1;
-    }
-    
-    fprintf(stdout, "(+) Opening \'%s\', found in %s\n", strrchr(argv[1], '/')+1, argv[1]);
-    
-    macho_map_t *map = map_macho_with_path(argv[1], O_RDONLY);
+int printKernelConfig(const char* kernelpath) {
+    macho_map_t *map = map_macho_with_path(kernelpath, O_RDONLY);
     assert(map);
     
     mh = get_mach_header32(map);
@@ -378,11 +384,12 @@ int main(int argc, const char * argv[]) {
     fprintf(stdout, "(+) Successfully mapped and validated kernelcache. Dumping offsets...\n\n");
     
     base = map->map_data;
+    ksize = map->map_size;
     kbase = find_segment_command32(mh, SEG_TEXT)->vmaddr;
     
     symtab = find_symtab_command(mh);
     assert(symtab);
-    
+    printf("if (!dstrcmp(uname, \"%s\")){\n", ADDR_KCACHE_TO_MAP(find_sym("_version")->n_value));
     FIND_AND_PRINT_OFFSET(OSSerializer_serialize);
     FIND_AND_PRINT_OFFSET(OSSymbol_getMetaClass);
     FIND_AND_PRINT_OFFSET(calend_gettime);
@@ -394,8 +401,32 @@ int main(int argc, const char * argv[]) {
     FIND_AND_PRINT_OFFSET(vm_kernel_addrperm); //WRONG
     FIND_AND_PRINT_OFFSET(kernel_pmap);
     FIND_AND_PRINT_OFFSET(invalidate_tlb);
-//    FIND_AND_PRINT_OFFSET(allproc); // WRONG
+    FIND_AND_PRINT_OFFSET(allproc); // WRONG
     FIND_AND_PRINT_OFFSET(proc_ucred);
     
+    uint32_t off_clock_ops = find_clock_ops();
+    uint32_t *off_orig_clockops_0 = *(uint32_t *)ADDR_KCACHE_TO_MAP(SLIDE(uint32_t, off_clock_ops, kbase));
+    uint32_t *off_orig_clockops_1 = *(uint32_t *)ADDR_KCACHE_TO_MAP(SLIDE(uint32_t, off_clock_ops+4, kbase));
+    uint32_t *off_orig_clockops_2 = *(uint32_t *)ADDR_KCACHE_TO_MAP(SLIDE(uint32_t, off_clock_ops+8, kbase));
+    uint32_t *off_orig_clockops_3 = *(uint32_t *)ADDR_KCACHE_TO_MAP(SLIDE(uint32_t, off_clock_ops+12, kbase));
+    uint32_t *off_orig_clockops_4 = *(uint32_t *)ADDR_KCACHE_TO_MAP(SLIDE(uint32_t, off_clock_ops+16, kbase));
+    
+    PRINT_OFFSET(orig_clockops_0);
+    PRINT_OFFSET(orig_clockops_1);
+    PRINT_OFFSET(orig_clockops_2);
+    PRINT_OFFSET(orig_clockops_3);
+    PRINT_OFFSET(orig_clockops_4);
+    printf("}\n");
+    
     return 0;
+}
+
+int main(int argc, const char * argv[]) {
+    if (argc != 2) {
+        printf("Usage: offsetfinder [kernelcache_path]\n");
+        return 1;
+    }
+    
+    fprintf(stdout, "(+) Opening \'%s\', found in %s\n", strrchr(argv[1], '/')+1, argv[1]);
+    printKernelConfig(argv[1]);
 }

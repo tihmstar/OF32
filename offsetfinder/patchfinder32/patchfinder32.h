@@ -35,7 +35,14 @@ int insn_is_bl(uint16_t* i);
 uint32_t insn_bl_imm32(uint16_t* i);
 
 int insn_is_pop(uint16_t *i);
+int insn_is_push(uint16_t *i);
 int insn_is_thumb2_ldr(uint16_t *i);
+int insn_is_thumb2_pop(uint16_t *i);
+int insn_is_thumb2_push(uint16_t *i);
+
+
+
+uint16_t* find_literal_ref(uint32_t region, uint8_t* kdata, size_t ksize, uint32_t address);
 
 
 #endif /* patchfinder32_h */
