@@ -31,11 +31,13 @@ enum {
 #define SLIDE(type, addr, slide)        (type)((type)addr + (type)slide)
 #define UNSLIDE(type, addr, slide)      (type)((type)addr - (type)slide)
 
-#define ADDR_MAP_TO_KCACHE(addr)        ({ uint32_t _tmp_addr =         ((addr) ? SLIDE(uint32_t, UNSLIDE(void*, addr, base), kbase) : 0); _tmp_addr; })
 #define ADDR_KCACHE_TO_MAP(addr)        ({ void *_tmp_addr =    (void *)((addr) ? SLIDE(uint64_t, UNSLIDE(uint32_t, addr, kbase), base) : 0); _tmp_addr; })
 
 void *base = NULL;
 uint32_t kbase = 0;
+
+uint32_t ADDR_MAP_TO_KCACHE(uint16_t* addr) { uint32_t _tmp_addr =         ((addr) ? SLIDE(uint32_t, UNSLIDE(void*, addr, base), kbase) : 0); return _tmp_addr; }
+
 
 struct mach_header *mh = NULL;
 struct symtab_command *symtab = NULL;
@@ -159,23 +161,27 @@ uint32_t find_clock_ops(void)
 {
     struct nlist *n = find_sym("_clock_get_system_value");
     assert(n);
-    
+    //0x3accdc
     uint32_t val = 0;
+    uint32_t *addr = 0;
     
-    for (uint16_t *p = (uint16_t *)(ADDR_KCACHE_TO_MAP(n->n_value)); *p != 0xBF00; p++) {
-        if (insn_is_mov_imm(p) && (!insn_mov_imm_rd(p))) {
-            val = insn_mov_imm_imm(p);
-        } else if (insn_is_movt(p) && (!insn_movt_rd(p))) {
-            val |= (insn_movt_imm(p) << 16);
-        } else if (insn_is_add_reg(p) && (!insn_add_reg_rd(p)) && (insn_add_reg_rm(p) == 0xF)) {
+    uint32_t addr2 = 0;
+    
+    for (uint16_t *p = (uint16_t *)(ADDR_KCACHE_TO_MAP(n->n_value)); !insn_is_pop(p); p++) {
+        if (insn_is_mov_imm(p) && insn_is_mov_imm(p) && !val) {
+            val = insn_mov_imm_imm(p++);
+        } else if (insn_is_movt(p) && val < (1<<16) ) {
+            val |= (insn_movt_imm(p++) << 16);
+        } else if (insn_is_add_reg(p) && (insn_add_reg_rm(p) == 0xF) && !addr) {
             uint32_t ip = ADDR_MAP_TO_KCACHE(p);
-            uint32_t *addr = (uint32_t *)ADDR_KCACHE_TO_MAP(ip+val+4);
-            assert(*addr);
-            
-            return UNSLIDE(uint32_t, ((*addr) + 0xC), kbase);
+            addr = (uint32_t *)ADDR_KCACHE_TO_MAP(ip+val+4);
+        } else if (insn_is_thumb2_ldr(p)){
+            addr2 = *(addr + ((*++p)& ((1<<12)-1))/4);
+        } else if (insn_is_ldr_imm(p) && addr2){
+            addr2 += insn_ldr_imm_imm(p) + 4;
+            return UNSLIDE(uint32_t, (addr2), kbase);
         }
     }
-    
     return 0;
 }
 
@@ -353,7 +359,7 @@ uint32_t find_task_for_pid(void)
 int main(int argc, const char * argv[]) {
     
     if (argc != 2) {
-        printf("Usage: ./OF32 [kernelcache_path]\n");
+        printf("Usage: offsetfinder [kernelcache_path]\n",argv[0]);
         return 1;
     }
     
@@ -385,14 +391,10 @@ int main(int argc, const char * argv[]) {
     FIND_AND_PRINT_OFFSET(copyin);
     FIND_AND_PRINT_OFFSET(bx_lr);
     FIND_AND_PRINT_OFFSET(write_gadget);
-    FIND_AND_PRINT_OFFSET(vm_kernel_addrperm);
+//    FIND_AND_PRINT_OFFSET(vm_kernel_addrperm); //WRONG
     FIND_AND_PRINT_OFFSET(kernel_pmap);
-    FIND_AND_PRINT_OFFSET(flush_dcache);
-    FIND_AND_PRINT_OFFSET(invalidate_tlb);
-    FIND_AND_PRINT_OFFSET(setreuid);
+//    FIND_AND_PRINT_OFFSET(allproc); // WRONG
     FIND_AND_PRINT_OFFSET(proc_ucred);
-    FIND_AND_PRINT_OFFSET(task_for_pid);
-    FIND_AND_PRINT_OFFSET(allproc);
     
     return 0;
 }

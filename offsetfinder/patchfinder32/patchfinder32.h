@@ -34,4 +34,8 @@ int insn_ldr_imm_imm(uint16_t* i);
 int insn_is_bl(uint16_t* i);
 uint32_t insn_bl_imm32(uint16_t* i);
 
+int insn_is_pop(uint16_t *i);
+int insn_is_thumb2_ldr(uint16_t *i);
+
+
 #endif /* patchfinder32_h */

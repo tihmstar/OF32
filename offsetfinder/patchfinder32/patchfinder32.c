@@ -8,6 +8,9 @@
 
 #include "patchfinder32.h"
 
+
+#define HAS_BITS(a,b) (((a) & (b)) == (b))
+
 static uint32_t bit_range(uint32_t x, int start, int end)
 {
     x = (x << (31 - start)) >> (31 - start);
@@ -143,6 +146,14 @@ int insn_is_ldr_imm(uint16_t* i)
     uint8_t opB = bit_range(*i, 11, 9);
     
     return opA == 6 && (opB & 4) == 4;
+}
+
+int insn_is_pop(uint16_t *i){
+    return HAS_BITS(*i, 0b111110001101 << 8);
+}
+
+int insn_is_thumb2_ldr(uint16_t *i){
+    return HAS_BITS(*i, 0b111110001101 << 4);
 }
 
 int insn_ldr_imm_rt(uint16_t* i)
