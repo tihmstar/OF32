@@ -9,8 +9,10 @@
 #include <stdio.h>
 #include <assert.h>
 
+#include "offsetfinder.h"
 #include "machoman/machoman.h"
 #include "patchfinder32/patchfinder32.h"
+
 
 enum {
     INSN_SEARCH_MODE_THUMB = 0,
@@ -381,7 +383,7 @@ int printKernelConfig(const char* kernelpath) {
         return 2;
     }
     
-    fprintf(stdout, "(+) Successfully mapped and validated kernelcache. Dumping offsets...\n\n");
+    fprintf(stderr, "(+) Successfully mapped and validated kernelcache. Dumping offsets...\n\n");
     
     base = map->map_data;
     ksize = map->map_size;
@@ -421,12 +423,3 @@ int printKernelConfig(const char* kernelpath) {
     return 0;
 }
 
-int main(int argc, const char * argv[]) {
-    if (argc != 2) {
-        printf("Usage: offsetfinder [kernelcache_path]\n");
-        return 1;
-    }
-    
-    fprintf(stdout, "(+) Opening \'%s\', found in %s\n", strrchr(argv[1], '/')+1, argv[1]);
-    printKernelConfig(argv[1]);
-}
