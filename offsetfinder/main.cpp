@@ -109,7 +109,18 @@ int main(int argc, const char * argv[]) {
         
         kbuf = (char*)malloc(ksize);
         
-        auto deckernel = libipatcher::extractKernel(kbuf, ksize, key);
+        std::pair<char*,size_t> deckernel;
+        
+        try{
+            deckernel = libipatcher::extractKernel(kbuf, ksize, key);
+        }catch(std::exception &e){
+            free(kbuf);
+            fprintf(stderr, "(!) Failed to get firmware key for %s!\n",link.first.c_str());
+            printf("\n#ERROR failed_to_find_firmware_key_for_%s\n",link.first.c_str());
+            continue;
+        }
+        free(kbuf);
+        
         
         macho_map_t *map = (macho_map_t *)malloc(sizeof(macho_map_t));
         map->map_data = deckernel.first;
@@ -118,12 +129,12 @@ int main(int argc, const char * argv[]) {
         map->unique_id = (uint32_t)(((uint64_t)map << 32) >> 32);
         
         fprintf(stderr, "(+) Finding offsets\n");
-        if (hasone) printf(" else ");
+        printf("\n// %s\n",link.first.c_str());
+        if (hasone) printf("else ");
         printKernelConfig(map);
         fprintf(stderr, "(+) Done %s\n",link.first.c_str());
         fflush(stdout);
         
-        free(kbuf);
         free(map);
         hasone = 1;
     }
