@@ -372,8 +372,8 @@ uint32_t find_task_for_pid(void)
 
 #define FIND_AND_PRINT_OFFSET(name)     { FIND_OFFSET(name); PRINT_OFFSET(name);}
 
-int printKernelConfig(const char* kernelpath) {
-    macho_map_t *map = map_macho_with_path(kernelpath, O_RDONLY);
+int printKernelConfig(macho_map_t *map) {
+//    macho_map_t *map = map_macho_with_path(kernelpath, O_RDONLY);
     assert(map);
     
     mh = get_mach_header32(map);
@@ -418,7 +418,9 @@ int printKernelConfig(const char* kernelpath) {
     PRINT_OFFSET(orig_clockops_2);
     PRINT_OFFSET(orig_clockops_3);
     PRINT_OFFSET(orig_clockops_4);
-    printf("}\n");
+    printf("}");
+    fprintf(stderr, "\n");
+
     
     return 0;
 }

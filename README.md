@@ -1,10 +1,9 @@
-# OF32
+# offsetfinder
 A simple tool to find offsets needed in 32bit jailbreaks. Feel free to contribute.
 
 ### How to use
-To build the tool simply use `make`. Then to use:
 ```
-./OF32 [unencrypted_kernelcache_path]
+./offsetfinder [iOS BuildID] (device1 device2 device3 ...)
 ```
 
 ### Notes

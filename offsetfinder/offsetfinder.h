@@ -9,7 +9,9 @@
 #ifndef offsetfinder_h
 #define offsetfinder_h
 
-int printKernelConfig(const char* kernelpath);
+#include "machoman.h"
+
+int printKernelConfig(macho_map_t *map);
 
 
 #endif /* offsetfinder_h */

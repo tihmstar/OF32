@@ -11,6 +11,11 @@
 		872EDD2B1F6B3DC100C153B3 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 872EDD2A1F6B3DC100C153B3 /* main.cpp */; };
 		873B54DA1F6A713D00E6EA7B /* patchfinder32.c in Sources */ = {isa = PBXBuildFile; fileRef = 873B54D81F6A713D00E6EA7B /* patchfinder32.c */; };
 		873B54DE1F6A716600E6EA7B /* machoman.c in Sources */ = {isa = PBXBuildFile; fileRef = 873B54DC1F6A716600E6EA7B /* machoman.c */; };
+		8791FEA41F6B454200D54D34 /* libcurl.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 8791FEA31F6B454200D54D34 /* libcurl.tbd */; };
+		8791FEA61F6B497F00D54D34 /* libfragmentzip.0.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 8791FEA51F6B497F00D54D34 /* libfragmentzip.0.dylib */; };
+		8791FEA91F6B508200D54D34 /* libipatcher.0.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 8791FEA71F6B4C9800D54D34 /* libipatcher.0.dylib */; };
+		87B0A5D51F6B416A00F712A0 /* jssy.c in Sources */ = {isa = PBXBuildFile; fileRef = 87B0A5D31F6B416A00F712A0 /* jssy.c */; };
+		87B0A5E61F6B443100F712A0 /* jssy.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 87B0A5E31F6B443100F712A0 /* jssy.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -32,6 +37,15 @@
 		873B54D91F6A713D00E6EA7B /* patchfinder32.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = patchfinder32.h; path = patchfinder32/patchfinder32.h; sourceTree = "<group>"; };
 		873B54DC1F6A716600E6EA7B /* machoman.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = machoman.c; path = machoman/machoman.c; sourceTree = "<group>"; };
 		873B54DD1F6A716600E6EA7B /* machoman.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = machoman.h; path = machoman/machoman.h; sourceTree = "<group>"; };
+		8791FEA31F6B454200D54D34 /* libcurl.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libcurl.tbd; path = usr/lib/libcurl.tbd; sourceTree = SDKROOT; };
+		8791FEA51F6B497F00D54D34 /* libfragmentzip.0.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libfragmentzip.0.dylib; path = ../../../../usr/local/lib/libfragmentzip.0.dylib; sourceTree = "<group>"; };
+		8791FEA71F6B4C9800D54D34 /* libipatcher.0.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libipatcher.0.dylib; path = ../../../../usr/local/lib/libipatcher.0.dylib; sourceTree = "<group>"; };
+		87B0A5D31F6B416A00F712A0 /* jssy.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = jssy.c; path = external/jssy/jssy/jssy.c; sourceTree = "<group>"; };
+		87B0A5D41F6B416A00F712A0 /* jssy.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = jssy.h; path = external/jssy/jssy/jssy.h; sourceTree = "<group>"; };
+		87B0A5E21F6B443100F712A0 /* helper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = helper.h; path = external/jssy/jssy/helper.h; sourceTree = "<group>"; };
+		87B0A5E31F6B443100F712A0 /* jssy.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = jssy.cpp; path = external/jssy/jssy/jssy.cpp; sourceTree = "<group>"; };
+		87B0A5E41F6B443100F712A0 /* jssy.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = jssy.hpp; path = external/jssy/jssy/jssy.hpp; sourceTree = "<group>"; };
+		87B0A5E51F6B443100F712A0 /* ptr_smart.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = ptr_smart.hpp; path = external/jssy/jssy/ptr_smart.hpp; sourceTree = "<group>"; };
 		87ECBF5B1F6A6F9F00D3E102 /* offsetfinder */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = offsetfinder; sourceTree = BUILT_PRODUCTS_DIR; };
 		87ECBF5E1F6A6F9F00D3E102 /* offsetfinder.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = offsetfinder.c; path = offsetfinder/offsetfinder.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -41,6 +55,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8791FEA91F6B508200D54D34 /* libipatcher.0.dylib in Frameworks */,
+				8791FEA61F6B497F00D54D34 /* libfragmentzip.0.dylib in Frameworks */,
+				8791FEA41F6B454200D54D34 /* libcurl.tbd in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +82,30 @@
 			name = machoman;
 			sourceTree = "<group>";
 		};
+		8791FEA21F6B454200D54D34 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				8791FEA71F6B4C9800D54D34 /* libipatcher.0.dylib */,
+				8791FEA51F6B497F00D54D34 /* libfragmentzip.0.dylib */,
+				8791FEA31F6B454200D54D34 /* libcurl.tbd */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		87B0A5D21F6B412100F712A0 /* jssy */ = {
+			isa = PBXGroup;
+			children = (
+				87B0A5E21F6B443100F712A0 /* helper.h */,
+				87B0A5E31F6B443100F712A0 /* jssy.cpp */,
+				87B0A5E41F6B443100F712A0 /* jssy.hpp */,
+				87B0A5E51F6B443100F712A0 /* ptr_smart.hpp */,
+				87B0A5D31F6B416A00F712A0 /* jssy.c */,
+				87B0A5D41F6B416A00F712A0 /* jssy.h */,
+			);
+			name = jssy;
+			path = ..;
+			sourceTree = "<group>";
+		};
 		87ECBF521F6A6F9F00D3E102 = {
 			isa = PBXGroup;
 			children = (
@@ -73,6 +114,7 @@
 				87ECBF5E1F6A6F9F00D3E102 /* offsetfinder.c */,
 				872EDD2A1F6B3DC100C153B3 /* main.cpp */,
 				87ECBF5C1F6A6F9F00D3E102 /* Products */,
+				8791FEA21F6B454200D54D34 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -89,6 +131,7 @@
 			children = (
 				873B54D71F6A712D00E6EA7B /* patchfinder32 */,
 				873B54DB1F6A714700E6EA7B /* machoman */,
+				87B0A5D21F6B412100F712A0 /* jssy */,
 			);
 			path = offsetfinder;
 			sourceTree = "<group>";
@@ -150,7 +193,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				87B0A5D51F6B416A00F712A0 /* jssy.c in Sources */,
 				873B54DA1F6A713D00E6EA7B /* patchfinder32.c in Sources */,
+				87B0A5E61F6B443100F712A0 /* jssy.cpp in Sources */,
 				872EDD281F6B3CEE00C153B3 /* offsetfinder.c in Sources */,
 				872EDD2B1F6B3DC100C153B3 /* main.cpp in Sources */,
 				873B54DE1F6A716600E6EA7B /* machoman.c in Sources */,
@@ -252,14 +297,20 @@
 		87ECBF631F6A6F9F00D3E102 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = YES;
+				LIBRARY_SEARCH_PATHS = /usr/local/lib;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				USER_HEADER_SEARCH_PATHS = /usr/local/include;
 			};
 			name = Debug;
 		};
 		87ECBF641F6A6F9F00D3E102 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = YES;
+				LIBRARY_SEARCH_PATHS = /usr/local/lib;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				USER_HEADER_SEARCH_PATHS = /usr/local/include;
 			};
 			name = Release;
 		};
