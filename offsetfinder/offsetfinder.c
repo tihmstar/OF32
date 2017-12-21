@@ -35,7 +35,7 @@ enum {
 
 #define ADDR_KCACHE_TO_MAP(addr)        ({ void *_tmp_addr =    (void *)((addr) ? SLIDE(uint64_t, UNSLIDE(uint32_t, addr, kbase), base) : 0); _tmp_addr; })
 
-void *base = NULL;
+uint8_t *base = NULL;
 uint32_t kbase = 0;
 uint32_t ksize = 0;
 
@@ -71,7 +71,7 @@ uint32_t find_sig(uint8_t *sig, size_t size)
         return -2;
     
     void *search_base = (base + text->fileoff);
-    void *p = memmem(search_base, text->filesize, sig, size);
+    uint8_t *p = memmem(search_base, text->filesize, sig, size);
     if (!p)
         return -3;
     
@@ -113,6 +113,92 @@ void *find_insn(void *start, size_t num, uint32_t insn, uint8_t direction, uint8
     return NULL;
 }
 
+static int insn_cmp_imm_rn(uint16_t* i)
+{
+    if((*i & 0xF800) == 0x2800)
+        return (*i >> 8) & 7;
+    else if((*i & 0xFBF0) == 0xF1B0 && (*(i + 1) & 0x8F00) == 0x0F00)
+        return *i & 0xF;
+    else
+        return 0;
+}
+
+static uint32_t bit_range(uint32_t x, int start, int end)
+{
+    x = (x << (31 - start)) >> (31 - start);
+    x = (x >> end);
+    return x;
+}
+
+static uint32_t ror(uint32_t x, int places)
+{
+    return (x >> places) | (x << (32 - places));
+}
+
+static int thumb_expand_imm_c(uint16_t imm12)
+{
+    if(bit_range(imm12, 11, 10) == 0)
+    {
+        switch(bit_range(imm12, 9, 8))
+        {
+            case 0:
+                return bit_range(imm12, 7, 0);
+            case 1:
+                return (bit_range(imm12, 7, 0) << 16) | bit_range(imm12, 7, 0);
+            case 2:
+                return (bit_range(imm12, 7, 0) << 24) | (bit_range(imm12, 7, 0) << 8);
+            case 3:
+                return (bit_range(imm12, 7, 0) << 24) | (bit_range(imm12, 7, 0) << 16) | (bit_range(imm12, 7, 0) << 8) | bit_range(imm12, 7, 0);
+            default:
+                return 0;
+        }
+    } else
+    {
+        uint32_t unrotated_value = 0x80 | bit_range(imm12, 6, 0);
+        return ror(unrotated_value, bit_range(imm12, 11, 7));
+    }
+}
+
+static int insn_cmp_imm_imm(uint16_t* i)
+{
+    if((*i & 0xF800) == 0x2800)
+        return *i & 0xFF;
+    else if((*i & 0xFBF0) == 0xF1B0 && (*(i + 1) & 0x8F00) == 0x0F00)
+        return thumb_expand_imm_c(((*i & 0x0400) << 1) | ((*(i + 1) & 0x7000) >> 4) | (*(i + 1) & 0xFF));
+    else
+        return 0;
+}
+
+static int insn_is_cmp_imm(uint16_t* i)
+{
+    if((*i & 0xF800) == 0x2800)
+        return 1;
+    else if((*i & 0xFBF0) == 0xF1B0 && (*(i + 1) & 0x8F00) == 0x0F00)
+        return 1;
+    else
+        return 0;
+}
+
+static uint16_t* find_next_insn_matching(uint32_t region, uint8_t* kdata, size_t ksize, uint16_t* current_instruction, int (*match_func)(uint16_t*)){
+    while((uintptr_t)current_instruction < (uintptr_t)kdata+ksize)
+    {
+        if(insn_is_32bit(current_instruction) && !insn_is_32bit(current_instruction +1))
+        {
+            current_instruction += 2;
+        } else
+        {
+            ++current_instruction;
+        }
+        
+        if(match_func(current_instruction))
+        {
+            return current_instruction;
+        }
+    }
+    
+    return NULL;
+}
+
 /* offset finders */
 
 uint32_t find_OSSerializer_serialize(void)
@@ -120,7 +206,7 @@ uint32_t find_OSSerializer_serialize(void)
     struct nlist *n = find_sym(OSSERIALIZER_SERIALIZE_SYMBOL_NAME);
     assert(n);
     
-    return UNSLIDE(uint32_t, n->n_value, kbase);
+    return UNSLIDE(uint32_t, n->n_value+1, kbase);
 }
 
 uint32_t find_OSSymbol_getMetaClass(void)
@@ -188,8 +274,7 @@ uint32_t find_clock_ops(void)
     return 0;
 }
 
-uint32_t find_copyin(void)
-{
+uint32_t find_copyin(void){
     struct nlist *n = find_sym(COPYIN_SYMBOL_NAME);
     assert(n);
     
@@ -244,6 +329,37 @@ uint32_t find_kernel_pmap(void)
     assert(n);
     
     return UNSLIDE(uint32_t, n->n_value, kbase);
+}
+
+uint32_t find_kernel_pmap_nosym(void){
+    uint8_t *str = memmem(base, ksize, "\"out of ptd entry", sizeof("\"out of ptd entry")-1);
+    assert(str);
+    
+    uint16_t *ref = find_literal_ref(kbase, base, ksize, str-(uint8_t*)base);
+    assert(ref);
+    
+    while (!insn_is_ldr_imm(ref)) ref ++;
+    
+    uint32_t *pmap = 0;
+    for (uint16_t *p = ref; p>base; p--) {
+        if (insn_is_bl(p)) {
+            int32_t dst = (insn_bl_imm32(p) + 4);
+            uint16_t *abs_dst = (uint16_t *)((uint8_t*)p+dst);
+            if (abs_dst == ref){
+                pmap = p;
+                break;
+            }
+        }
+    }
+    
+    while (!insn_is_movt(pmap) || !insn_is_mov_imm(pmap-1)) pmap--;
+    pmap--;
+    uint32_t pmap_add_val = insn_mov_imm_imm(pmap++);
+    pmap_add_val |= insn_movt_imm(pmap++) << 16;
+    
+    pmap = (uint8_t*)pmap + pmap_add_val + 4;
+    
+    return UNSLIDE(uint32_t, pmap, base);
 }
 
 uint32_t find_flush_dcache(void)
@@ -329,8 +445,7 @@ uint32_t find_allproc(void)
     return UNSLIDE(uint32_t, offset, kbase);
 }
 
-uint32_t find_proc_ucred(void)
-{
+uint32_t find_proc_ucred(void){
     struct nlist *n = find_sym("_proc_ucred");
     assert(n);
     
@@ -367,10 +482,386 @@ uint32_t find_task_for_pid(void)
     return find_sig((void *)&sig, sizeof(sig));
 }
 
-#define FIND_OFFSET(name)               uint32_t off_##name = find_##name()
-#define PRINT_OFFSET(name)              fprintf(stdout, "pushOffset(0x%08x); //%s\n", off_##name, #name)
+uint32_t find_zone_map(){
+    uint8_t *ptr=memmem(base, ksize, "zone_init", sizeof("zone_init"));
+    uint16_t *ref = find_literal_ref(kbase, base, ksize, ptr-(uint8_t*)base);
+    
+    uint32_t val = 0;
+    int rd = -1;
+    while (!(val >> 16 && (val & ((1<<16)-1)))){
+        if (insn_is_mov_imm(ref)){
+            int trd = insn_movt_rd(ref);
+            if (rd != trd && rd != -1)
+                return 0;
+            else
+                rd = trd;
+            val |= insn_mov_imm_imm(ref++);
+        }else if (insn_is_movt(ref)){
+            int trd = insn_movt_rd(ref);
+            if (rd != trd && rd != -1)
+                return 0;
+            else
+                rd = trd;
+            val |= insn_movt_imm(ref++) << 16;
+        }
+        ref++;
+    }
+    while (!insn_is_add_reg(ref))
+        ref++;
+    
+    if (insn_add_reg_rd(ref) != rd || insn_add_reg_rm(ref) != 15)
+        return 0;
+    
+    return (uint32_t)UNSLIDE(uint32_t,((uint8_t*)ref+4+val),base);
+}
 
-#define FIND_AND_PRINT_OFFSET(name)     { FIND_OFFSET(name); PRINT_OFFSET(name);}
+uint32_t find_kernel_map(void){
+    struct nlist *n = find_sym("_kernel_map");
+    assert(n);
+    return UNSLIDE(uint32_t, n->n_value, kbase);
+}
+
+uint32_t find_kernel_task(void){
+    struct nlist *n = find_sym("_kernel_task");
+    assert(n);
+    return UNSLIDE(uint32_t, n->n_value, kbase);
+}
+
+uint32_t find_realhost(void){
+    struct nlist *n = find_sym("_KUNCExecute");
+    assert(n);
+    uint16_t *ref = ADDR_KCACHE_TO_MAP(n->n_value);
+
+    uint32_t val = 0;
+    int rd = -1;
+    while (!(val >> 16 && (val & ((1<<16)-1)))){
+        if (insn_is_mov_imm(ref)){
+            int trd = insn_movt_rd(ref);
+            if (rd != trd && rd != -1)
+                return 0;
+            else
+                rd = trd;
+            val |= insn_mov_imm_imm(ref++);
+        }else if (insn_is_movt(ref)){
+            int trd = insn_movt_rd(ref);
+            if (rd != trd && rd != -1)
+                return 0;
+            else
+                rd = trd;
+            val |= insn_movt_imm(ref++) << 16;
+        }
+        ref++;
+    }
+    
+    if (insn_add_reg_rd(ref) != rd || insn_add_reg_rm(ref) != 15)
+        return 0;
+    
+    return (uint32_t)UNSLIDE(uint32_t,((uint8_t*)ref+4+val),base);
+}
+
+uint32_t find_bzero(void){
+    struct nlist *n = find_sym("___bzero");
+    assert(n);
+    return UNSLIDE(uint32_t, n->n_value, kbase);
+}
+
+uint32_t find_bcopy(void){
+    struct nlist *n = find_sym("_bcopy");
+    assert(n);
+    return UNSLIDE(uint32_t, n->n_value+1, kbase);
+}
+
+uint32_t find_copyout(void){
+    struct nlist *n = find_sym("_copyout");
+    assert(n);
+    return UNSLIDE(uint32_t, n->n_value, kbase);
+}
+
+uint32_t find_ipc_port_alloc_special(void){
+    struct nlist *n = find_sym("_KUNCGetNotificationID");
+    assert(n);
+    uint16_t *ref = ADDR_KCACHE_TO_MAP(n->n_value);
+    
+    while (!insn_is_bl(ref))
+        ref++;
+    ref++;
+    while (!insn_is_bl(ref))
+        ref++;
+    
+    int32_t val = insn_bl_imm32(ref);
+    
+    return (uint32_t)UNSLIDE(uint32_t,((uint8_t*)ref+4+val+1),base);
+}
+
+uint32_t find_ipc_kobject_set(void){
+    struct nlist *n = find_sym("_KUNCGetNotificationID");
+    assert(n);
+    uint16_t *ref = ADDR_KCACHE_TO_MAP(n->n_value);
+    
+    while (!insn_is_bl(ref))
+        ref++;
+    ref++;
+    while (!insn_is_bl(ref))
+        ref++;
+    ref++;
+    while (!insn_is_bl(ref))
+        ref++;
+    
+    int32_t val = insn_bl_imm32(ref);
+    
+    return (uint32_t)UNSLIDE(uint32_t,((uint8_t*)ref+4+val+1),base);
+}
+
+uint32_t find_ipc_port_make_send(void){
+    struct nlist *n = find_sym("_convert_task_to_port");
+    assert(n);
+    uint16_t *ref = ADDR_KCACHE_TO_MAP(n->n_value);
+    
+    while (!insn_is_bl(ref))
+        ref++;
+    ref++;
+    while (!insn_is_bl(ref))
+        ref++;
+    
+    int32_t val = insn_bl_imm32(ref);
+    
+    return (uint32_t)UNSLIDE(uint32_t,((uint8_t*)ref+4+val+1),base);
+}
+
+uint32_t find_rop_ldr_r0_r0_0xc(){
+    uint8_t *p = memmem(base, ksize, "\xC0\x68\x70\x47", 4);
+    if (!p)
+        return 0;
+    
+    return (uint32_t)(p+1 - base);
+}
+
+uint32_t find_ipc_space_is_task(){
+    uint8_t *ptr=memmem(base, ksize, "\"ipc_task_init\"", sizeof("\"ipc_task_init\""));
+    uint16_t *ref = find_literal_ref(kbase, base, ksize, (uint32_t)(ptr-base));
+    
+    int foundboth = 0;
+    int rd = -1;
+    do{
+        ref--;
+        if (insn_is_mov_imm(ref)){
+            int trd = insn_movt_rd(ref);
+            if (rd != trd && rd != -1)
+                return 0;
+            else
+                rd = trd;
+            foundboth |=1;
+        }else if (insn_is_movt(ref)){
+            int trd = insn_movt_rd(ref);
+            if (rd != trd && rd != -1)
+                return 0;
+            else
+                rd = trd;
+            foundboth |=2;
+        }
+    } while (foundboth!=3);
+    
+    uint16_t *bne = find_rel_branch_ref(ref, 0x1200, -1,insn_is_thumb2_bne);
+    
+    uint16_t *strw = bne;
+    while (!insn_is_thumb2_strw(strw))
+        strw++;
+    
+    return insn_thumb2_strw_imm(strw);
+}
+
+
+typedef struct mig_subsystem_struct {
+    uint32_t min;
+    uint32_t max;
+    char *names;
+} mig_subsys;
+
+mig_subsys task_subsys ={ 0xd48, 0xd7a , NULL};
+uint32_t find_task_itk_self(){
+    uint32_t *task_subsystem=memmem(base, ksize, &task_subsys, 4);
+    if (!task_subsystem)
+        return 0;
+    task_subsystem += 5;
+    
+    uint16_t *mach_ports_register = task_subsystem[3*6];
+    mach_ports_register = ADDR_KCACHE_TO_MAP(((uint64_t)mach_ports_register &~1));
+    
+    
+    struct nlist *n = find_sym("_lck_mtx_lock");
+    assert(n);
+    uint16_t *lck_mtx_lock = ADDR_KCACHE_TO_MAP(n->n_value);
+    
+    uint16_t *thebl = 0;
+    for (uint16_t *p = mach_ports_register; p<mach_ports_register+0x200; p++) {
+        if (insn_is_bl(p)) {
+            int32_t dst = (insn_bl_imm32(p) + 4);
+            uint16_t *abs_dst = (uint16_t *)((uint8_t*)p+dst);
+            if (abs_dst == lck_mtx_lock){
+                thebl = p;
+                break;
+            }
+        }
+    }
+    
+    while (!insn_is_thumb2_ldr(++thebl));
+    
+    return insn_thumb2_ldr_imm_imm(thebl);
+}
+
+uint32_t find_task_itk_registered(){
+    uint32_t *task_subsystem=memmem(base, ksize, &task_subsys, 4);
+    if (!task_subsystem)
+        return 0;
+    task_subsystem += 5;
+    
+    uint16_t *mach_ports_register = task_subsystem[3*6];
+    mach_ports_register = ADDR_KCACHE_TO_MAP(((uint64_t)mach_ports_register &~1));
+    
+    
+    struct nlist *n = find_sym("_lck_mtx_lock");
+    assert(n);
+    uint16_t *lck_mtx_lock = ADDR_KCACHE_TO_MAP(n->n_value);
+    
+    uint16_t *thebl = 0;
+    for (uint16_t *p = mach_ports_register; p<mach_ports_register+0x200; p++) {
+        if (insn_is_bl(p)) {
+            int32_t dst = (insn_bl_imm32(p) + 4);
+            uint16_t *abs_dst = (uint16_t *)((uint8_t*)p+dst);
+            if (abs_dst == lck_mtx_lock){
+                thebl = p;
+                break;
+            }
+        }
+    }
+    
+    while (!insn_is_thumb2_ldr(++thebl));
+    
+    while (!insn_is_thumb2_ldr(++thebl));
+    
+    return insn_thumb2_ldr_imm_imm(thebl);
+}
+
+uint32_t find_vtab_get_external_trap_for_index(){
+    struct nlist *n = find_sym("__ZTV12IOUserClient");
+    assert(n);
+    uint32_t *vtab_IOUserClient = ADDR_KCACHE_TO_MAP(n->n_value);
+    vtab_IOUserClient += 2;
+    
+    struct nlist *nn = find_sym("__ZN12IOUserClient23getExternalTrapForIndexEm");
+    assert(nn);
+    uint32_t getExternalTrapForIndex = nn->n_value+1;
+    
+    for (int i=0; i<0x200; i++) {
+        if (vtab_IOUserClient[i]==getExternalTrapForIndex)
+            return i;
+    }
+    
+    return 0;
+}
+
+//IOUSERCLIENT_IPC
+mig_subsys host_priv_subsys = { 400, 426 } ;
+uint32_t find_iouserclient_ipc(){
+    uint32_t *host_priv_subsystem=memmem(base, ksize, &host_priv_subsys, 8);
+    if (!host_priv_subsystem)
+        return 0;
+    
+    uint32_t *thetable = 0;
+    while (host_priv_subsystem>base){
+        struct _anon{
+            uint32_t ptr;
+            uint32_t z0;
+            uint32_t z1;
+        } *obj = host_priv_subsystem;
+        if (!obj->z0 && !obj->z1 &&
+            !memcmp(&obj[0], &obj[1], sizeof(struct _anon)) &&
+            !memcmp(&obj[0], &obj[2], sizeof(struct _anon)) &&
+            !memcmp(&obj[0], &obj[3], sizeof(struct _anon)) &&
+            !memcmp(&obj[0], &obj[4], sizeof(struct _anon)) &&
+            !obj[-1].ptr && obj[-1].z0 == 1 && !obj[-1].z1) {
+            thetable = host_priv_subsystem;
+            break;
+        }
+        host_priv_subsystem--;
+    }
+    
+    uint16_t *iokit_user_client_trap = ((uint32_t)UNSLIDE(uint32_t, (thetable[100*3] &~1), kbase) + base);
+    
+    uint16_t *bl_to_iokit_add_connect_reference = iokit_user_client_trap;
+    
+    while (!insn_is_bl(bl_to_iokit_add_connect_reference) || bl_to_iokit_add_connect_reference[-1] != 0x4620) //mov r0, r4
+           bl_to_iokit_add_connect_reference++;
+    
+    int32_t dst = (insn_bl_imm32(bl_to_iokit_add_connect_reference) + 4);
+    uint16_t *abs_dst = (uint16_t *)((uint8_t*)bl_to_iokit_add_connect_reference+dst);
+    
+    struct nlist *n = find_sym("_OSDecrementAtomic");
+    assert(n);
+    uint16_t *OSDecrementAtomic = ADDR_KCACHE_TO_MAP(n->n_value);
+    
+    uint16_t *thebl = 0;
+    for (uint16_t *p = abs_dst; p<abs_dst+0x200; p++) {
+        if (insn_is_bl(p)) {
+            int32_t dst = (insn_bl_imm32(p) + 4);
+            uint16_t *abs_dst = (uint16_t *)((uint8_t*)p+dst);
+            if (abs_dst == OSDecrementAtomic){
+                thebl = p;
+                break;
+            }
+        }
+    }
+    thebl-=2;
+    
+    assert(insn_is_thumb2_add(thebl) && insn_thumb2_add_rd(thebl) == 0);
+    
+    return insn_thumb2_add_imm(thebl);
+}
+
+uint32_t find_chgproccnt(){
+    uint8_t *ptr=memmem(base, ksize, "\"chgproccnt: lost user\"", sizeof("\"chgproccnt: lost user\""));
+    uint16_t *ref = find_literal_ref(kbase, base, ksize, (uint32_t)(ptr-base));
+    
+    while (!insn_is_thumb2_push(--ref));
+    while (!insn_is_push(--ref));
+    
+    return UNSLIDE(uint8_t*, ref+1, base);
+}
+
+uint32_t find_kauth_cred_ref(void){
+    struct nlist *n = find_sym("_kauth_cred_ref");
+    assert(n);
+    return UNSLIDE(uint32_t, n->n_value+1, kbase);
+}
+
+uint32_t find_sizeof_task(){
+    uint8_t *ptr=memmem(base, ksize, "tasks", sizeof("tasks"));
+    uint16_t *ref = find_literal_ref(kbase, base, ksize, (uint32_t)(ptr-base));
+    ref++;
+    
+    struct nlist *n = find_sym("_zinit");
+    assert(n);
+    uint16_t *zinit = ADDR_KCACHE_TO_MAP(n->n_value);
+    
+    assert(insn_is_mov_imm(ref) && insn_is_bl(ref+2) && insn_bl_imm32(ref+2)+4+(uint8_t*)ref+4 == zinit);
+    
+    return insn_mov_imm_imm(ref);
+}
+
+uint32_t find_task_bsd_info(void){
+    struct nlist *n = find_sym("_get_bsdtask_info");
+    assert(n);
+    
+    uint32_t *addr = (uint32_t *)(ADDR_KCACHE_TO_MAP(n->n_value));
+    assert(addr && *addr);
+    
+    return ((*addr) >> 16);
+}
+
+#define FIND_OFFSET(name)               uint32_t off_##name = find_##name()
+#define PRINT_OFFSET(name,slide)              fprintf(stdout, "pushOffset(0x%08x); //%s\n", off_##name + (slide ? kbase : 0), #name)
+
+#define FIND_AND_PRINT_OFFSET(name,slide)     { FIND_OFFSET(name); PRINT_OFFSET(name,slide);}
 
 int printKernelConfig(macho_map_t *map) {
 //    macho_map_t *map = map_macho_with_path(kernelpath, O_RDONLY);
@@ -382,42 +873,43 @@ int printKernelConfig(macho_map_t *map) {
         printf("Error: Invalid kernelcache!\n");
         return 2;
     }
-    
     fprintf(stderr, "(+) Successfully mapped and validated kernelcache. Dumping offsets...\n\n");
     
     base = map->map_data;
-    ksize = map->map_size;
+    ksize = (uint32_t)map->map_size;
     kbase = find_segment_command32(mh, SEG_TEXT)->vmaddr;
     
     symtab = find_symtab_command(mh);
     assert(symtab);
+
     printf("if (!dstrcmp(uname, \"%s\")){\n", ADDR_KCACHE_TO_MAP(find_sym("_version")->n_value));
-    FIND_AND_PRINT_OFFSET(OSSerializer_serialize);
-    FIND_AND_PRINT_OFFSET(OSSymbol_getMetaClass);
-    FIND_AND_PRINT_OFFSET(calend_gettime);
-    FIND_AND_PRINT_OFFSET(bufattr_cpx);
-    FIND_AND_PRINT_OFFSET(clock_ops);
-    FIND_AND_PRINT_OFFSET(copyin);
-    FIND_AND_PRINT_OFFSET(bx_lr);
-    FIND_AND_PRINT_OFFSET(write_gadget);
-    FIND_AND_PRINT_OFFSET(vm_kernel_addrperm); //WRONG
-    FIND_AND_PRINT_OFFSET(kernel_pmap);
-    FIND_AND_PRINT_OFFSET(invalidate_tlb);
-    FIND_AND_PRINT_OFFSET(allproc); // WRONG
-    FIND_AND_PRINT_OFFSET(proc_ucred);
+    FIND_AND_PRINT_OFFSET(zone_map,1);
+    FIND_AND_PRINT_OFFSET(kernel_map,1);
+    FIND_AND_PRINT_OFFSET(kernel_task,1);
+    FIND_AND_PRINT_OFFSET(realhost,1);
+    FIND_AND_PRINT_OFFSET(bzero,1);
+    FIND_AND_PRINT_OFFSET(bcopy,1);
+    FIND_AND_PRINT_OFFSET(copyin,1);
+    FIND_AND_PRINT_OFFSET(copyout,1);
+    FIND_AND_PRINT_OFFSET(ipc_port_alloc_special,1);
+    FIND_AND_PRINT_OFFSET(ipc_kobject_set,1);
+    FIND_AND_PRINT_OFFSET(ipc_port_make_send,1);
+    FIND_AND_PRINT_OFFSET(rop_ldr_r0_r0_0xc,1);
+    FIND_AND_PRINT_OFFSET(chgproccnt,1);
+    FIND_AND_PRINT_OFFSET(kauth_cred_ref,1);
+    FIND_AND_PRINT_OFFSET(OSSerializer_serialize,1);
     
-    uint32_t off_clock_ops = find_clock_ops();
-    uint32_t *off_orig_clockops_0 = *(uint32_t *)ADDR_KCACHE_TO_MAP(SLIDE(uint32_t, off_clock_ops, kbase));
-    uint32_t *off_orig_clockops_1 = *(uint32_t *)ADDR_KCACHE_TO_MAP(SLIDE(uint32_t, off_clock_ops+4, kbase));
-    uint32_t *off_orig_clockops_2 = *(uint32_t *)ADDR_KCACHE_TO_MAP(SLIDE(uint32_t, off_clock_ops+8, kbase));
-    uint32_t *off_orig_clockops_3 = *(uint32_t *)ADDR_KCACHE_TO_MAP(SLIDE(uint32_t, off_clock_ops+12, kbase));
-    uint32_t *off_orig_clockops_4 = *(uint32_t *)ADDR_KCACHE_TO_MAP(SLIDE(uint32_t, off_clock_ops+16, kbase));
+    FIND_AND_PRINT_OFFSET(ipc_space_is_task,0);
+    FIND_AND_PRINT_OFFSET(task_itk_self,0);
+    FIND_AND_PRINT_OFFSET(task_itk_registered,0);
+    FIND_AND_PRINT_OFFSET(vtab_get_external_trap_for_index,0);
+    FIND_AND_PRINT_OFFSET(iouserclient_ipc,0);
+    FIND_AND_PRINT_OFFSET(proc_ucred,0);
+    FIND_AND_PRINT_OFFSET(task_bsd_info,0);
+    FIND_AND_PRINT_OFFSET(sizeof_task,0);
     
-    PRINT_OFFSET(orig_clockops_0);
-    PRINT_OFFSET(orig_clockops_1);
-    PRINT_OFFSET(orig_clockops_2);
-    PRINT_OFFSET(orig_clockops_3);
-    PRINT_OFFSET(orig_clockops_4);
+    
+    
     printf("}");
     fprintf(stderr, "\n");
 

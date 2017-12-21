@@ -48,10 +48,10 @@ int main(int argc, const char * argv[]) {
     res = curl_easy_perform(curl);
     curl_easy_cleanup(curl);
     fclose(fp);
-    
+
     fprintf(stderr, "(+) Parsing firmwares.json\n");
     jssycpp::jssy firmwares(outfilename);
-    
+
     vector<pair<string, string>> devlinks;
     for (auto dev : firmwares["devices"]){
         for (int i=2; i< argc; i++){
@@ -69,9 +69,9 @@ int main(int argc, const char * argv[]) {
     for (auto link:devlinks){
         fprintf(stderr, "(+) Opening Firmware for %s\n",link.first.c_str());
         fragmentzip_t * fz = fragmentzip_open(link.second.c_str());
-        
+
         assert(fz);
-        
+
         fragmentzip_cd* cd = fz->cd;
         for(int i = 0; i < fz->cd_end->cd_entries; i++) {
             if (cd->len_filename > strlen("kernelcache") && !strncmp(cd->filename,"kernelcache",strlen("kernelcache"))){
@@ -90,27 +90,21 @@ int main(int argc, const char * argv[]) {
         fragmentzip_close(fz);
         fprintf(stderr, "(+) Getting Firmware key\n");
         libipatcher::fw_key key;
-        try{
-            key = libipatcher::getFirmwareKey(link.first, {argv[1]}, "Kernelcache");
-        }catch(std::exception &e){
-            fprintf(stderr, "(!) Failed to get firmware key for %s!\n",link.first.c_str());
-            printf("\n#ERROR failed_to_find_firmware_key_for_%s\n",link.first.c_str());
-            continue;
-        }
-        
+        key.iv[0] = key.key[0] = '0'; //indicate no encryption
+
         FILE *enckf = fopen("/tmp/offsetfinderkernel", "r");
         char *kbuf = NULL;
         size_t ksize = 0;
-        
+
         fseek(enckf, 0, SEEK_END);
         ksize = ftell(enckf);
         fseek(enckf, 0, SEEK_SET);
         fclose(enckf);
-        
+
         kbuf = (char*)malloc(ksize);
-        
+
         std::pair<char*,size_t> deckernel;
-        
+
         try{
             deckernel = libipatcher::extractKernel(kbuf, ksize, key);
         }catch(std::exception &e){
@@ -120,21 +114,30 @@ int main(int argc, const char * argv[]) {
             continue;
         }
         free(kbuf);
-        
-        
-        macho_map_t *map = (macho_map_t *)malloc(sizeof(macho_map_t));
-        map->map_data = deckernel.first;
-        map->map_magic = MACHO_MAP_MAGIC;
-        map->map_size = (mach_vm_size_t)deckernel.second;
-        map->unique_id = (uint32_t)(((uint64_t)map << 32) >> 32);
-        
+
+//    if (1){
+//        std::pair<char*,size_t> deckernel;
+//        FILE *kk = fopen("/Users/tihmstar/Desktop/jb1033/kernelcache.release.iphone5.dec", "rb");
+//        fseek(kk, 0, SEEK_END);
+//        deckernel.second = ftell(kk);
+//        fseek(kk, 0, SEEK_SET);
+//        deckernel.first = (char*)malloc(deckernel.second);
+//        fread(deckernel.first, 1, deckernel.second, kk);
+//        fclose(kk);
+//
+//        macho_map_t *map = (macho_map_t *)malloc(sizeof(macho_map_t));
+//        map->map_data = deckernel.first;
+//        map->map_magic = MACHO_MAP_MAGIC;
+//        map->map_size = (mach_vm_size_t)deckernel.second;
+//        map->unique_id = (uint32_t)(((uint64_t)map << 32) >> 32);
+    
         fprintf(stderr, "(+) Finding offsets\n");
         printf("\n// %s\n",link.first.c_str());
         if (hasone) printf("else ");
         printKernelConfig(map);
         fprintf(stderr, "(+) Done %s\n",link.first.c_str());
         fflush(stdout);
-        
+
         free(map);
         hasone = 1;
     }

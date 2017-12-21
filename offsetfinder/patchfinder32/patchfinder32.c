@@ -148,8 +148,12 @@ int insn_is_ldr_imm(uint16_t* i)
     return opA == 6 && (opB & 4) == 4;
 }
 
+int insn_is_ldr_literal(uint16_t *i){
+    return (*i >> 11) == 0b01001;
+}
+
 int insn_is_pop(uint16_t *i){
-    return HAS_BITS(*i, 0b111110001101 << 8);
+    return (*i >> 9) == 0b1011110;
 }
 
 int insn_is_push(uint16_t *i){
@@ -158,6 +162,14 @@ int insn_is_push(uint16_t *i){
 
 int insn_is_thumb2_pop(uint16_t *i){
     return (*i == 0xe8bd);
+}
+
+int insn_is_thumb2_tst(uint16_t *i){
+    return !insn_is_bl(i) && (((*i >> 5) & ~(0b100000)) == 0b11110000000);
+}
+
+int insn_tst_imm(uint16_t *i){
+    return *(i+1) % (1<<8);
 }
 
 int insn_is_thumb2_push(uint16_t *i){
@@ -178,6 +190,10 @@ int insn_ldr_imm_imm(uint16_t* i)
     return (((*i >> 6) & 0x1F) << 2);
 }
 
+int insn_thumb2_ldr_imm_imm(uint16_t* i){
+    return *(i+1) % (1<<12);
+}
+
 int insn_is_bl(uint16_t* i)
 {
     if((*i & 0xf800) == 0xf000 && (*(i + 1) & 0xd000) == 0xd000)
@@ -186,6 +202,77 @@ int insn_is_bl(uint16_t* i)
         return 1;
     else
         return 0;
+}
+
+int insn_is_thumb2_branch(uint16_t *i){
+    return (*i >>11 == 0b11110) && (*(i+1)>>15 == 0b1);
+}
+
+int insn_is_thumb2_bne(uint16_t *i){
+    return HAS_BITS(*i >>6, 0b1111000001) && (*(i+1)>>15 == 0b1);
+}
+
+int insn_is_thumb2_orr(uint16_t *i){
+    return HAS_BITS((*i)>>5, 0b11110000010) && (*(i+1) >> 15 == 0);
+}
+
+int insn_is_thumb2_strw(uint16_t *i){
+    return (*i >> 4) == 0b111110001100;
+}
+
+int insn_is_thumb2_add(uint16_t *i){
+    return (((*i >> 5) & ~(1<<5)) == 0b11110001000 && (*(i+1) >> 15) == 0);
+}
+
+uint8_t insn_thumb2_orr_rn(uint16_t *i){
+    return *i % (1<<4);
+}
+
+uint8_t insn_ldr_literal_rt(uint16_t *i){
+    return (*i >> 8) % (1 << 3);
+}
+
+uint8_t insn_ldr_literal_imm(uint16_t *i){
+    return *i % (1 << 8);
+}
+
+uint8_t insn_thumb2_orr_rd(uint16_t *i){
+    return (*(i+1) >> 8) % (1 << 4);
+}
+
+uint8_t insn_thumb2_orr_imm(uint16_t *i){
+    return *(i+1) % (1<<8);
+}
+
+uint8_t insn_thumb2_strw_rn(uint16_t *i){
+    return *i % (1<<4);
+}
+
+uint8_t insn_thumb2_strw_rt(uint16_t *i){
+    return *(i+1) >> 12;
+}
+
+uint8_t insn_thumb2_strw_imm(uint16_t *i){
+    return *(i+1) % (1 << 12);
+}
+
+uint8_t insn_thumb2_add_rn(uint16_t *i){
+    return *i % (1 << 4);
+}
+
+uint8_t insn_thumb2_add_rd(uint16_t *i){
+    return (*(i+1) >> 8) % (1 << 4);
+}
+
+uint8_t insn_thumb2_add_imm(uint16_t *i){
+    return *(i+1) % (1 << 8);
+}
+
+
+uint32_t insn_thumb2_branch_imm(uint16_t *i){
+    uint32_t imm6 = (*i % (1<<6));
+    uint32_t imm11 = *(i+1) % (1<<11);
+    return (imm6<<11) | imm11;
 }
 
 uint32_t insn_bl_imm32(uint16_t* i)
@@ -203,20 +290,39 @@ uint32_t insn_bl_imm32(uint16_t* i)
     return imm32;
 }
 
+uint16_t *find_rel_branch_ref(uint16_t* start, size_t len, int step, int (*branch_check_func)(uint16_t*)){
+    for (uint16_t *i = start; len>sizeof(uint16_t); len-=abs(step)*sizeof(uint16_t),i+=step) {
+        if (branch_check_func(i)) {
+            int32_t imm = (insn_thumb2_branch_imm(i)+2)*2;
+            uint8_t *dst = imm + (uint8_t*)i;
+            if (dst == start) {
+                return i;
+            }
+        }
+    }
+    return 0;
+}
+
 uint16_t* find_literal_ref(uint32_t region, uint8_t* kdata, size_t ksize, uint32_t address){
     
     for (uint16_t *p=kdata; p<kdata+ksize; p++) {
         if (insn_add_reg_rm(p) == 15){
             int rd = insn_add_reg_rd(p);
             uint32_t val = 0;
-            uint32_t pc = (uint8_t*)p - kdata + region;
+            uint8_t* pc = (uint8_t*)p - kdata + region;
             for (uint16_t *pp = p; pp>kdata; pp--) {
                 
                 if (insn_is_movt(pp) && insn_movt_rd(pp) == rd && !(val>>16)){
                     val |= insn_movt_imm(pp) << 16;
                 }else if (insn_is_mov_imm(pp) && insn_mov_imm_rd(pp) == rd && !(val & ((1<<16)-1))){
                     val |= insn_mov_imm_imm(pp);
-                }else if (insn_is_push(pp)){
+                }
+                else if (insn_is_ldr_literal(pp) && insn_ldr_literal_rt(pp) == rd){
+                    val = (insn_ldr_literal_imm(pp)*4+4);
+                    val = *(uint32_t*)((uint8_t*)p+val-2);
+                    break;
+                }
+                else if (insn_is_push(pp)){
                     val=0;
                     break;
                 }
@@ -226,7 +332,7 @@ uint16_t* find_literal_ref(uint32_t region, uint8_t* kdata, size_t ksize, uint32
             if (!val)
                 continue;
             
-            uint32_t ref = pc + 4 + val;
+            uint8_t* ref = pc + 4 + val;
             if (ref == address+region)
                 return p;
         }
