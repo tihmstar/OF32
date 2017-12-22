@@ -312,9 +312,9 @@ uint16_t* find_literal_ref(uint32_t region, uint8_t* kdata, size_t ksize, uint32
             uint8_t* pc = (uint8_t*)p - kdata + region;
             for (uint16_t *pp = p; pp>kdata; pp--) {
                 
-                if (insn_is_movt(pp) && insn_movt_rd(pp) == rd && !(val>>16)){
+                if (insn_is_32bit(pp) && insn_is_movt(pp) && insn_movt_rd(pp) == rd && !(val>>16)){
                     val |= insn_movt_imm(pp) << 16;
-                }else if (insn_is_mov_imm(pp) && insn_mov_imm_rd(pp) == rd && !(val & ((1<<16)-1))){
+                }else if (insn_is_32bit(pp) && insn_is_mov_imm(pp) && insn_mov_imm_rd(pp) == rd && !(val & ((1<<16)-1))){
                     val |= insn_mov_imm_imm(pp);
                 }
                 else if (insn_is_ldr_literal(pp) && insn_ldr_literal_rt(pp) == rd){

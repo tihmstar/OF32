@@ -837,6 +837,7 @@ uint32_t find_kauth_cred_ref(void){
 uint32_t find_sizeof_task(){
     uint8_t *ptr=memmem(base, ksize, "tasks", sizeof("tasks"));
     uint16_t *ref = find_literal_ref(kbase, base, ksize, (uint32_t)(ptr-base));
+    assert(ref);
     ref++;
     
     struct nlist *n = find_sym("_zinit");
@@ -863,7 +864,7 @@ uint32_t find_task_bsd_info(void){
 
 #define FIND_AND_PRINT_OFFSET(name,slide)     { FIND_OFFSET(name); PRINT_OFFSET(name,slide);}
 
-int printKernelConfig(macho_map_t *map) {
+int printKernelConfig(macho_map_t *map, int (*doprint)(char*version)) {
 //    macho_map_t *map = map_macho_with_path(kernelpath, O_RDONLY);
     assert(map);
     
@@ -881,8 +882,12 @@ int printKernelConfig(macho_map_t *map) {
     
     symtab = find_symtab_command(mh);
     assert(symtab);
+    char *version = ADDR_KCACHE_TO_MAP(find_sym("_version")->n_value);
+    
+    if (!doprint(version))
+        return 1;
 
-    printf("if (!dstrcmp(uname, \"%s\")){\n", ADDR_KCACHE_TO_MAP(find_sym("_version")->n_value));
+    printf("if (!dstrcmp(uname, \"%s\")){\n", version);
     FIND_AND_PRINT_OFFSET(zone_map,1);
     FIND_AND_PRINT_OFFSET(kernel_map,1);
     FIND_AND_PRINT_OFFSET(kernel_task,1);

@@ -17,6 +17,7 @@ extern "C"{
 #include <libipatcher/libipatcher.hpp>
 #include "jssy.hpp"
 #include <vector>
+#include <set>
 #include <assert.h>
 
 using namespace std;
@@ -24,6 +25,17 @@ using namespace std;
 size_t write_data(void *ptr, size_t size, size_t nmemb, FILE *stream) {
     size_t written = fwrite(ptr, size, nmemb, stream);
     return written;
+}
+
+set<string> found;
+
+int doprint(char *version){
+    string v{version};
+    
+    if (found.find(v) != found.end())
+        return (fprintf(stderr, "not printing %s again\n",version),0);
+    found.insert(v);
+    return 1;
 }
 
 int main(int argc, const char * argv[]) {
@@ -125,16 +137,17 @@ int main(int argc, const char * argv[]) {
 //        fread(deckernel.first, 1, deckernel.second, kk);
 //        fclose(kk);
 //
-//        macho_map_t *map = (macho_map_t *)malloc(sizeof(macho_map_t));
-//        map->map_data = deckernel.first;
-//        map->map_magic = MACHO_MAP_MAGIC;
-//        map->map_size = (mach_vm_size_t)deckernel.second;
-//        map->unique_id = (uint32_t)(((uint64_t)map << 32) >> 32);
+        macho_map_t *map = (macho_map_t *)malloc(sizeof(macho_map_t));
+        map->map_data = deckernel.first;
+        map->map_magic = MACHO_MAP_MAGIC;
+        map->map_size = (mach_vm_size_t)deckernel.second;
+        map->unique_id = (uint32_t)(((uint64_t)map << 32) >> 32);
     
         fprintf(stderr, "(+) Finding offsets\n");
         printf("\n// %s\n",link.first.c_str());
         if (hasone) printf("else ");
-        printKernelConfig(map);
+        if (printKernelConfig(map,doprint))
+            printf("if (0) {}\n");
         fprintf(stderr, "(+) Done %s\n",link.first.c_str());
         fflush(stdout);
 

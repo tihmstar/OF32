@@ -11,7 +11,7 @@
 
 #include "machoman.h"
 
-int printKernelConfig(macho_map_t *map);
+int printKernelConfig(macho_map_t *map, int (*doprint)(char*version));
 
 
 #endif /* offsetfinder_h */
