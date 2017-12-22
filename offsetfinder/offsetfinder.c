@@ -840,11 +840,31 @@ uint32_t find_sizeof_task(){
     assert(ref);
     ref++;
     
-    struct nlist *n = find_sym("_zinit");
-    assert(n);
-    uint16_t *zinit = ADDR_KCACHE_TO_MAP(n->n_value);
+    uint16_t *zinit = 0;
     
-    assert(insn_is_mov_imm(ref) && insn_is_bl(ref+2) && insn_bl_imm32(ref+2)+4+(uint8_t*)ref+4 == zinit);
+    struct nlist *n = find_sym("_zinit");
+    if (n) {
+        zinit = ADDR_KCACHE_TO_MAP(n->n_value);
+    }else if ((ptr=memmem(base, ksize, "zlog%d", sizeof("zlog%d")))){
+        uint16_t *ref2 = find_literal_ref(kbase, base, ksize, (uint32_t)(ptr-base));
+        if (ref2) {
+            while (!insn_is_thumb2_push(--ref2));
+            while (!insn_is_push(--ref2));
+            zinit = ref2;
+        }
+    }
+
+    uint16_t *bl = ref+2;
+    if (!insn_is_bl(bl))
+        bl+=2;
+    
+    assert(insn_is_mov_imm(ref) && insn_is_bl(bl));
+    
+    if (zinit)
+        assert(insn_bl_imm32(bl)+4+(uint8_t*)bl == zinit);
+    else{
+        fprintf(stderr, "WARNING: can't find zinit. Can't verify sizeof_task\n");
+    }
     
     return insn_mov_imm_imm(ref);
 }
