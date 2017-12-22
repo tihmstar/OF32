@@ -661,11 +661,11 @@ uint32_t find_ipc_space_is_task(){
         }
     } while (foundboth!=3);
     
-    uint16_t *bne = find_rel_branch_ref(ref, 0x1200, -1,insn_is_thumb2_bne);
+    uint16_t *beq = find_rel_branch_ref(ref, 0x1200, -1,insn_is_thumb2_branch);
+    assert(beq);
     
-    uint16_t *strw = bne;
-    while (!insn_is_thumb2_strw(strw))
-        strw++;
+    uint16_t *strw = beq;
+    while (!insn_is_thumb2_strw(--strw));
     
     return insn_thumb2_strw_imm(strw);
 }
