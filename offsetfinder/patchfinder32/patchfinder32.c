@@ -318,8 +318,10 @@ uint16_t* find_literal_ref(uint32_t region, uint8_t* kdata, size_t ksize, uint32
                     val |= insn_mov_imm_imm(pp);
                 }
                 else if (insn_is_ldr_literal(pp) && insn_ldr_literal_rt(pp) == rd){
-                    val = (insn_ldr_literal_imm(pp)*4+4);
-                    val = *(uint32_t*)((uint8_t*)p+val-2);
+                    val = (insn_ldr_literal_imm(pp)*4+2);
+                    if (insn_is_32bit(pp))
+                        val +=2;
+                    val = *(uint32_t*)((uint8_t*)p+val-2);                    
                     break;
                 }
                 else if (insn_is_push(pp)){
