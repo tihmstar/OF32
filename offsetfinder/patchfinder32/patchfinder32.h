@@ -41,6 +41,8 @@ int insn_is_thumb2_strw(uint16_t *i);
 int insn_is_thumb2_add(uint16_t *i);
 int insn_is_ldr_literal(uint16_t *i);
 
+int insn_is_adr(uint16_t *i);
+
 
 uint8_t insn_thumb2_orr_rn(uint16_t *i);
 uint8_t insn_thumb2_orr_rd(uint16_t *i);
@@ -53,6 +55,8 @@ uint8_t insn_thumb2_add_rd(uint16_t *i);
 uint8_t insn_thumb2_add_imm(uint16_t *i);
 uint8_t insn_ldr_literal_rt(uint16_t *i);
 uint8_t insn_ldr_literal_imm(uint16_t *i);
+uint8_t insn_adr_rd(uint16_t *i);
+uint8_t insn_adr_imm(uint16_t *i);
 
 uint32_t insn_thumb2_branch_imm(uint16_t *i);
 

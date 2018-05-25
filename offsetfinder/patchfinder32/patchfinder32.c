@@ -152,6 +152,11 @@ int insn_is_ldr_literal(uint16_t *i){
     return (*i >> 11) == 0b01001;
 }
 
+int insn_is_adr(uint16_t *i){
+    return HAS_BITS(*i, 0b10100 << 11);
+}
+
+
 int insn_is_pop(uint16_t *i){
     return (*i >> 9) == 0b1011110;
 }
@@ -233,6 +238,14 @@ uint8_t insn_ldr_literal_rt(uint16_t *i){
 }
 
 uint8_t insn_ldr_literal_imm(uint16_t *i){
+    return *i % (1 << 8);
+}
+
+uint8_t insn_adr_rd(uint16_t *i){
+    return (*i >> 8) % (1 << 3);
+}
+
+uint8_t insn_adr_imm(uint16_t *i){
     return *i % (1 << 8);
 }
 
