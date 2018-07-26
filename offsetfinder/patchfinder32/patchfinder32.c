@@ -213,6 +213,10 @@ int insn_is_thumb2_branch(uint16_t *i){
     return (*i >>11 == 0b11110) && (*(i+1)>>15 == 0b1);
 }
 
+int insn_is_thumb_branch(uint16_t *i){
+    return ((*i >>11 == 0b11100) || (*i >>12 == 0b1101));
+}
+
 int insn_is_thumb2_bne(uint16_t *i){
     return HAS_BITS(*i >>6, 0b1111000001) && (*(i+1)>>15 == 0b1);
 }
@@ -281,12 +285,21 @@ uint8_t insn_thumb2_add_imm(uint16_t *i){
     return *(i+1) % (1 << 8);
 }
 
-
 uint32_t insn_thumb2_branch_imm(uint16_t *i){
     uint32_t imm6 = (*i % (1<<6));
     uint32_t imm11 = *(i+1) % (1<<11);
     return (imm6<<11) | imm11;
 }
+
+uint32_t insn_thumb_branch_imm(uint16_t *i){
+    if (*i >>11 == 0b11100) {
+        return *i % (1<<11);
+    }else{
+        return *i % (1<<8);
+    }
+}
+
+
 
 uint32_t insn_bl_imm32(uint16_t* i)
 {
@@ -303,10 +316,10 @@ uint32_t insn_bl_imm32(uint16_t* i)
     return imm32;
 }
 
-uint16_t *find_rel_branch_ref(uint16_t* start, size_t len, int step, int (*branch_check_func)(uint16_t*)){
+uint16_t *find_rel_branch_ref(uint16_t* start, size_t len, int step, int (*branch_check_func)(uint16_t*), int32_t (*branch_imm_func)(uint16_t*)){
     for (uint16_t *i = start; len>sizeof(uint16_t); len-=abs(step)*sizeof(uint16_t),i+=step) {
         if (branch_check_func(i)) {
-            int32_t imm = (insn_thumb2_branch_imm(i)+2)*2;
+            int32_t imm = (branch_imm_func(i)+2)*2;
             uint8_t *dst = imm + (uint8_t*)i;
             if (dst == start) {
                 return i;

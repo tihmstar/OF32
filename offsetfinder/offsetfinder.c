@@ -491,16 +491,19 @@ uint32_t find_zone_map(){
     while (!(val >> 16 && (val & ((1<<16)-1)))){
         if (insn_is_mov_imm(ref)){
             int trd = insn_movt_rd(ref);
-            if (rd != trd && rd != -1)
-                return 0;
+            if (rd != trd && rd != -1){
+                ref++;
+                continue;
+            }
             else
                 rd = trd;
             val |= insn_mov_imm_imm(ref++);
         }else if (insn_is_movt(ref)){
             int trd = insn_movt_rd(ref);
-            if (rd != trd && rd != -1)
-                return 0;
-            else
+            if (rd != trd && rd != -1){
+                ref++;
+                continue;
+            }else
                 rd = trd;
             val |= insn_movt_imm(ref++) << 16;
         }
@@ -537,21 +540,25 @@ uint32_t find_realhost(void){
     while (!(val >> 16 && (val & ((1<<16)-1)))){
         if (insn_is_mov_imm(ref)){
             int trd = insn_movt_rd(ref);
-            if (rd != trd && rd != -1)
-                return 0;
-            else
+            if (rd != trd && rd != -1){
+                ref++;
+                continue;
+            }else
                 rd = trd;
             val |= insn_mov_imm_imm(ref++);
         }else if (insn_is_movt(ref)){
             int trd = insn_movt_rd(ref);
-            if (rd != trd && rd != -1)
-                return 0;
-            else
+            if (rd != trd && rd != -1){
+                ref++;
+                continue;
+            }else
                 rd = trd;
             val |= insn_movt_imm(ref++) << 16;
         }
         ref++;
     }
+    while (!insn_is_add_reg(ref))
+        ref++;
     
     if (insn_add_reg_rd(ref) != rd || insn_add_reg_rm(ref) != 15)
         return 0;
@@ -646,22 +653,26 @@ uint32_t find_ipc_space_is_task(){
         ref--;
         if (insn_is_mov_imm(ref)){
             int trd = insn_movt_rd(ref);
-            if (rd != trd && rd != -1)
-                return 0;
-            else
+            if (rd != trd && rd != -1){
+                ref++;
+                continue;
+            }else
                 rd = trd;
             foundboth |=1;
         }else if (insn_is_movt(ref)){
             int trd = insn_movt_rd(ref);
-            if (rd != trd && rd != -1)
-                return 0;
-            else
+            if (rd != trd && rd != -1){
+                ref++;
+                continue;
+            }else
                 rd = trd;
             foundboth |=2;
         }
     } while (foundboth!=3);
     
-    uint16_t *beq = find_rel_branch_ref(ref, 0x1200, -1,insn_is_thumb2_branch);
+    uint16_t *beq = find_rel_branch_ref(ref, 0x1200, -1,insn_is_thumb2_branch,insn_thumb2_branch_imm);
+    if (!beq)
+        beq = find_rel_branch_ref(ref, 0x1200, -1,insn_is_thumb_branch,insn_thumb_branch_imm);
     assert(beq);
     
     uint16_t *strw = beq;
@@ -763,30 +774,58 @@ uint32_t find_vtab_get_external_trap_for_index(){
 //IOUSERCLIENT_IPC
 mig_subsys host_priv_subsys = { 400, 426 } ;
 uint32_t find_iouserclient_ipc(){
+    uint16_t *iokit_user_client_trap = NULL;
     uint32_t *host_priv_subsystem=memmem(base, ksize, &host_priv_subsys, 8);
     if (!host_priv_subsystem)
         return 0;
     
-    uint32_t *thetable = 0;
-    while (host_priv_subsystem>base){
+    uint32_t *thetable = host_priv_subsystem;
+    while (thetable>base){
         struct _anon{
             uint32_t ptr;
             uint32_t z0;
             uint32_t z1;
-        } *obj = host_priv_subsystem;
+        } *obj = thetable;
         if (!obj->z0 && !obj->z1 &&
             !memcmp(&obj[0], &obj[1], sizeof(struct _anon)) &&
             !memcmp(&obj[0], &obj[2], sizeof(struct _anon)) &&
             !memcmp(&obj[0], &obj[3], sizeof(struct _anon)) &&
             !memcmp(&obj[0], &obj[4], sizeof(struct _anon)) &&
             !obj[-1].ptr && obj[-1].z0 == 1 && !obj[-1].z1) {
-            thetable = host_priv_subsystem;
             break;
         }
-        host_priv_subsystem--;
+        thetable--;
     }
     
-    uint16_t *iokit_user_client_trap = ((uint32_t)UNSLIDE(uint32_t, (thetable[100*3] &~1), kbase) + base);
+    if ((uint8_t*)thetable != base) {
+        iokit_user_client_trap = ((uint32_t)UNSLIDE(uint32_t, (thetable[100*3] &~1), kbase) + base);
+    
+    }else{//iOS 11 kernel??
+        thetable = 0;
+        while (host_priv_subsystem>base){
+            struct _anon2{
+                uint32_t ptr;
+                uint32_t z0;
+                uint32_t z1;
+                uint32_t z2;
+            } *obj = host_priv_subsystem;
+            if (obj->ptr && !obj->z0 && !obj->z1 && !obj->z2 &&
+                !memcmp(&obj[0], &obj[1], sizeof(struct _anon2)) &&
+                !memcmp(&obj[0], &obj[2], sizeof(struct _anon2)) &&
+                !memcmp(&obj[0], &obj[3], sizeof(struct _anon2)) &&
+                !memcmp(&obj[0], &obj[4], sizeof(struct _anon2)) &&
+                !memcmp(&obj[0], &obj[5], sizeof(struct _anon2)) &&
+                !memcmp(&obj[0], &obj[6], sizeof(struct _anon2)) &&
+                !memcmp(&obj[0], &obj[7], sizeof(struct _anon2)) &&
+                !memcmp(&obj[0], &obj[8], sizeof(struct _anon2)) &&
+                !obj[-1].z2) {
+                thetable = host_priv_subsystem;
+            }
+            host_priv_subsystem--;
+        }
+        iokit_user_client_trap = ((uint32_t)UNSLIDE(uint32_t, (thetable[100*4] &~1), kbase) + base);
+    }
+    assert(iokit_user_client_trap);
     
     uint16_t *bl_to_iokit_add_connect_reference = iokit_user_client_trap;
     
@@ -855,8 +894,11 @@ uint32_t find_sizeof_task(){
     }
 
     uint16_t *bl = ref+2;
-    if (!insn_is_bl(bl))
-        bl+=2;
+    while (!insn_is_bl(bl))
+        bl++;
+    
+    while (!insn_is_mov_imm(ref))
+        ref++;
     
     assert(insn_is_mov_imm(ref) && insn_is_bl(bl));
     
@@ -882,7 +924,7 @@ uint32_t find_task_bsd_info(void){
 #define FIND_OFFSET(name)               uint32_t off_##name = find_##name()
 #define PRINT_OFFSET(name,slide)              fprintf(stdout, "pushOffset(0x%08x); //%s\n", off_##name + (slide ? kbase : 0), #name)
 
-#define FIND_AND_PRINT_OFFSET(name,slide)     { FIND_OFFSET(name); PRINT_OFFSET(name,slide);}
+#define FIND_AND_PRINT_OFFSET(name,slide)     { FIND_OFFSET(name); /*assert(off_##name); */ PRINT_OFFSET(name,slide);}
 
 int printKernelConfig(macho_map_t *map, int (*doprint)(char*version)) {
 //    macho_map_t *map = map_macho_with_path(kernelpath, O_RDONLY);
@@ -924,7 +966,8 @@ int printKernelConfig(macho_map_t *map, int (*doprint)(char*version)) {
     FIND_AND_PRINT_OFFSET(kauth_cred_ref,1);
     FIND_AND_PRINT_OFFSET(OSSerializer_serialize,1);
     
-    FIND_AND_PRINT_OFFSET(ipc_space_is_task,0);
+//    FIND_AND_PRINT_OFFSET(ipc_space_is_task,0);
+    printf("pushOffset(0x00000018); //ipc_space_is_task\n");
     FIND_AND_PRINT_OFFSET(task_itk_self,0);
     FIND_AND_PRINT_OFFSET(task_itk_registered,0);
     FIND_AND_PRINT_OFFSET(vtab_get_external_trap_for_index,0);
